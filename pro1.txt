@@ -1,0 +1,138 @@
+compression() {
+    echo "Enter the path of the file to be compressed:"
+    read file_path
+
+    if [[ ! -f "$file_path" ]]; then
+        echo "Error: File does not exist or is not readable."
+        return 1
+    fi
+
+    local compressed_file="${file_path}.compressed"
+    local dictionary_file="dictionary.txt"
+    local word code
+    declare -A dictionary
+
+    # Calculate the uncompressed size (in bytes)
+    uncompressed_size=$(wc -c < "$file_path")
+
+    # Read in the dictionary if it exists
+    if [[ -f "$dictionary_file" ]]; then
+        while IFS=" " read -r code word; do
+            dictionary["$word"]="$code"
+        done < "$dictionary_file"
+    fi
+
+    # Remove existing compressed file, if any
+    rm -f "$compressed_file"
+
+    # Read the input file word-by-word, splitting by non-alphanumeric characters
+    OLD_IFS=$IFS
+    IFS=$' \t\n.,;?!'
+    while read -r -a words; do
+        for word in "${words[@]}"; do
+            if [[ -z "${dictionary["$word"]}" ]]; then
+                code=$(printf "0x%04x" "${#dictionary[@]}")
+                dictionary["$word"]="$code"
+                # Save the new word and its code to the dictionary file
+                echo "$code $word" >> "$dictionary_file"
+            fi
+            # Append the code to the compressed file
+            echo "${dictionary["$word"]}" >> "$compressed_file"
+        done
+    done < "$file_path"
+    IFS=$OLD_IFS
+
+    # Calculate the compressed size (assuming each code has a length of 16 bits or 2 bytes)
+    compressed_size=$(wc -l < "$compressed_file")
+    compressed_size=$((compressed_size * 2))
+
+    # Compute and print the compression ratio
+    compression_ratio=$(echo "scale=3; $uncompressed_size / $compressed_size" | bc)
+    echo "Compression Ratio: $compression_ratio"
+
+    # Display the dictionary
+    echo -e "\nDictionary:"
+    echo -e "Code\tWord"
+    for word in "${!dictionary[@]}"; do
+        echo -e "${dictionary["$word"]}\t$word"
+    done
+}
+#-----------------------------------------------------------------------
+decompression() {
+    echo "Enter the path of the file to be decompressed:"
+    read file_path
+
+    local decompressed_file="${file_path}.decompressed"
+    local dictionary_file="dictionary.txt"
+    local code word
+
+    declare -A dictionary
+
+    # Read in the dictionary
+    if [[ -f "$dictionary_file" ]]; then
+        while IFS=" " read -r code word; do
+            dictionary["$code"]="$word"  # Note the change in order: Code is now the key.
+        done < "$dictionary_file"
+    else
+        echo "Dictionary file not found!"
+        return 1
+    fi
+
+    # Remove existing decompressed file, if any
+    rm -f "$decompressed_file"
+
+    # Read the compressed file line by line
+    while read -r code; do
+        word="${dictionary["$code"]}"
+
+        # If word not found in the dictionary, print an error and exit
+        if [[ -z "$word" ]]; then
+            echo "Error: Code '$code' not found in dictionary."
+            exit 1
+        fi
+
+        # Append the word to the decompressed file
+        if [[ "$word" == '\n' ]]; then
+            echo >> "$decompressed_file"
+        else
+            echo -n "$word " >> "$decompressed_file"
+        fi
+    done < "$file_path"
+}
+#-----------------------------------------------------------------------
+echo "________________Welcome To The menu Of Shell scripting Project___________________"
+#-----------------------------------------------------
+echo "1) Does the Dictionary File exist?"
+read answer1
+
+if [[ "$answer1" = "yes" || "$answer1" = "YES" ]]; then
+    echo -e "Enter the path of the file \n"
+    read DicFiley
+else
+    echo "The File is not there so we will create one!!!"
+    DicFileN=Dictionary.txt
+fi
+
+#----------------------------------------------------------
+
+while true; do
+
+    echo "What do you want to do?"
+    echo "c: Compression"
+    echo "d: Decompression"
+    echo "q: Quit"
+    read -p "Enter your choice (c, d, q): " answer2
+
+    if [[ "$answer2" = "c" || "$answer2" = "C" ]]; then 
+        compression 
+    elif [[ "$answer2" = "d" || "$answer2" = "D" ]]; then 
+        decompression 
+    elif [[ "$answer2" = "q" || "$answer2" = "Q" ]]; then
+        exit 0
+    else
+        echo "Invalid input. Please choose c, C, d, D, or Q."
+    fi
+
+done
+
+#---------------------------------------------------------
